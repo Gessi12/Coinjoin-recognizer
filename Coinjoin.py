@@ -189,7 +189,7 @@ def process_transaction_file(file_path, debug=False):
 
 def main():
     # 指定 JSON 文件路径
-    file_path = "./txn/block_795500_transactions_details.json"
+    file_path = "./block_795499_transactions_details.json"
     process_transaction_file(file_path, debug=False)
 
 
