@@ -4,28 +4,37 @@ from collections import Counter
 
 
 def log_debug(message, debug):
-    """统一管理调试日志输出。"""
+    """Unified management of debug log output."""
     if debug:
         print(message)
 
 
 def has_minimum_inputs(vin, debug=False):
-    """规则 1: 至少 3 个输入。"""
+    """Rule 1: At least 3 inputs."""
     if len(vin) < 3:
         log_debug("Not CoinJoin: Less than 3 inputs.", debug)
         return False
     return True
 
 
-# def has_sufficient_outputs(vin, vout, debug=False):
-#     """规则 2: 输出数量必须 >= 输入数量。"""
-#     if len(vout) < len(vin):
-#         log_debug("Not CoinJoin: Outputs are fewer than inputs.", debug)
-#         return False
-#     return True
+def has_sufficient_outputs(vin, vout, debug=False):
+    """Rule 2: The output quantity must be at least half of the input quantity"""
+    if int(math.log2(len(vout))) < 6:
+        if len(vout) < len(vin):
+            log_debug("Not CoinJoin: The output quantity is less than the input quantity.", debug)
+            return False
+    else:
+        if len(vout) < len(vin)/2:
+            log_debug("Not CoinJoin: The output quantity is less than half of the input quantity.", debug)
+            return False
+    
+    return True
 
 def has_repeated_output_value(vout, debug=False):
-    """规则 3: 至少一个输出金额出现 'target' 次或更多。"""
+    """
+    Rule 3:
+    - At least one output value must reach the threshold frequency.
+    """
     if len(vout) < 3:
         log_debug("Not CoinJoin: Insufficient outputs for meaningful analysis.", debug)
         return False
@@ -46,11 +55,11 @@ def has_repeated_output_value(vout, debug=False):
     return False
 
 # def has_repeated_output_value(vout, debug=False):
-#     """
-#     规则 3 & 7: 
-#     1. 如果只有一种输出金额，检查其数量是否达到阈值。
-#     2. 如果有多种输出金额，至少有两种金额的数量达到阈值。
-#     """
+    # """
+    # Rule 3:
+    # - If there is only one output value, check whether its frequency reaches the threshold.
+    # - If there are multiple output values, at least two must reach the threshold.
+    # """
 #     if len(vout) < 3:
 #         log_debug("Not CoinJoin: Insufficient outputs for meaningful analysis.", debug)
 #         return False
@@ -93,7 +102,7 @@ def has_repeated_output_value(vout, debug=False):
 
 
 def has_same_value_different_addresses(vout, debug=False):
-    """规则 4: 输出中相同金额必须具有不同的地址。"""
+    """Rule 4: Same output value must have different addresses."""
     seen_values = {}
     for output in vout:
         value = output.get("value")
@@ -110,7 +119,7 @@ def has_same_value_different_addresses(vout, debug=False):
     return True
 
 def has_reasonable_output_count(vin, vout, debug=False):
-    """规则 5: 输出数量必须合理。"""
+    """Rule 5: The number of outputs must be reasonable."""
     max_output_count = len(vin) * 2
     if len(vout) >= max_output_count:
         log_debug(
@@ -121,7 +130,7 @@ def has_reasonable_output_count(vin, vout, debug=False):
     return True
 
 def has_op_return_output(vout, debug=False):
-    """规则 6: 检查是否有 OP_RETURN 类型的输出。"""
+    """Rule 6: Check for OP_RETURN type outputs."""
     for output in vout:
         if output.get("value") == 0 and output.get("scriptPubKey", {}).get("type") == "nulldata":
             log_debug(f"CoinJoin-like detected: Found OP_RETURN output: {output}", debug)
@@ -132,16 +141,16 @@ def has_op_return_output(vout, debug=False):
 
 def is_coinjoin_like(tx, debug=False):
     """
-    检测交易是否具有 CoinJoin-like 特征。
+    Detect whether a transaction has CoinJoin-like characteristics.
     """
     vin = tx.get("vin", [])
     vout = tx.get("vout", [])
 
-    # 验证规则
+    # Validate rules
     if not has_minimum_inputs(vin, debug):
         return False
-    # if not has_sufficient_outputs(vin, vout, debug):
-    #     return False
+    if not has_sufficient_outputs(vin, vout, debug):
+        return False
     if not has_reasonable_output_count(vin, vout, debug):
         return False
     if not has_same_value_different_addresses(vout, debug):
@@ -151,13 +160,13 @@ def is_coinjoin_like(tx, debug=False):
     if not has_repeated_output_value(vout, debug):
         return False
 
-    # 如果所有规则都通过，认为可能是 CoinJoin 交易
+    # If all rules pass, it is considered possibly CoinJoin-like
     return True
 
 
 def process_transaction_file(file_path, debug=False):
     """
-    从文件加载交易数据并检测是否为 CoinJoin-like。
+    Load transaction data from a file and detect whether it is CoinJoin-like.
     """
     try:
         with open(file_path, "r") as f:
@@ -170,12 +179,12 @@ def process_transaction_file(file_path, debug=False):
         print("Invalid transaction format in JSON file.")
         return
 
-    # 处理单笔交易或交易列表
+    # Process single transaction or list of transactions
     transactions = [data] if isinstance(data, dict) else data
     print(f"Loaded {len(transactions)} transactions for analysis.")
 
     amount = 0
-    # 检测每笔交易
+    # Detect each transaction
     for idx, res in enumerate(transactions, start=1):
         tx = res.get("result", {})
         if is_coinjoin_like(tx, debug=debug):
@@ -188,8 +197,8 @@ def process_transaction_file(file_path, debug=False):
 
 
 def main():
-    # 指定 JSON 文件路径
-    file_path = "./block_795499_transactions_details.json"
+    # Specify the JSON file path
+    file_path = "./txn/block_795550_transactions_details.json"
     process_transaction_file(file_path, debug=False)
 
 
