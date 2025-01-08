@@ -9,11 +9,12 @@ import datetime
 
 def log_debug(message, debug, log_file="coinjoin_analysis.log"):
     """Unified management of debug log output and save logs to a file"""
-    """统一管理调试日志输出，并将日志保存到文件，附带时间戳"""
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # 格式化时间
-    log_message = f"[{timestamp}] {message}"  # 加上时间戳的日志信息
+    ""Unified management of debugging log output, and saving the logs to a file with timestamps attached"""
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") 
+    log_message = f"[{timestamp}] {message}" 
 
     if debug:
+        print(log_message)
         # Write log to file
         with open(log_file, "a") as log:
             log.write(log_message + "\n")
