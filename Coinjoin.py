@@ -111,21 +111,35 @@ def has_repeated_output_value(vout, transaction_hash, debug=False, log_file=Fals
 #     log_debug(f"Not CoinJoin: No output value meets the threshold: {target}.", debug, log_file)
 #     return False
 
-
-def has_same_value_different_addresses(vout, debug=False, log_file=False):
-    """Rule 4: Same output value must have different addresses"""
-    seen_values = {}
+def has_unique_addresses(vout, debug=False, log_file=None):
+    """
+    Rule 4: Output addresses must be unique.
+    """
+    seen_addresses = set()
     for output in vout:
-        value = output.get("value")
         addresses = output.get("addresses", [])
-        if value and addresses:
-            for address in addresses:
-                if value in seen_values and seen_values[value] == address:
-                    log_debug(f"Not CoinJoin: Output with value {value} has the same address {address}.", debug, log_file)
-                    return False
-                seen_values[value] = address
-    log_debug("Rule 4 passed: Same value has different addresses.", debug, log_file)
+        for address in addresses:
+            if address in seen_addresses:
+                log_debug(f"Not CoinJoin: Duplicate address found: {address}.", debug, log_file)
+                return False
+            seen_addresses.add(address)
+    log_debug("Rule passed: All output addresses are unique.", debug, log_file)
     return True
+
+# def has_same_value_different_addresses(vout, debug=False, log_file=False):
+#     """Rule 4: Same output value must have different addresses"""
+#     seen_values = {}
+#     for output in vout:
+#         value = output.get("value")
+#         addresses = output.get("addresses", [])
+#         if value and addresses:
+#             for address in addresses:
+#                 if value in seen_values and seen_values[value] == address:
+#                     log_debug(f"Not CoinJoin: Output with value {value} has the same address {address}.", debug, log_file)
+#                     return False
+#                 seen_values[value] = address
+#     log_debug("Rule 4 passed: Same value has different addresses.", debug, log_file)
+#     return True
 
 
 def has_reasonable_output_count(vin, vout, debug=False, log_file=False):
@@ -184,7 +198,7 @@ def is_coinjoin_like(tx, debug=False, log_file=False, top5_file=False):
         return False
     if not has_op_return_output(vout, debug, log_file):
         return False
-    if not has_same_value_different_addresses(vout, debug, log_file):
+    if not has_unique_addresses(vout, debug, log_file):
         return False
     if not has_repeated_output_value(vout,transaction_hash ,debug, log_file,top5_file):
         return False
