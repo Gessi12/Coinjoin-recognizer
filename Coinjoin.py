@@ -29,7 +29,7 @@ def has_minimum_inputs(vin, debug=False, log_file=False):
 
 
 def has_sufficient_outputs(vin, vout, debug=False, log_file=False):
-    """Rule 2: The output quantity must be at least half of the input quantity"""
+
     if int(math.log2(len(vout))) + 1 < 5:
         if len(vout) < len(vin):
             log_debug("Not CoinJoin: The output quantity is less than the input quantity.", debug, log_file)
@@ -42,7 +42,7 @@ def has_sufficient_outputs(vin, vout, debug=False, log_file=False):
     return True
 
 
-def has_repeated_output_value(vout, transaction_hash, debug=False, log_file=False, top5_file=False):
+def has_repeated_output_value(vout,vin, transaction_hash, debug=False, log_file=False, top10_file=False):
     """
     Rule 3:
     - At least one output value must reach the threshold frequency.
@@ -54,23 +54,34 @@ def has_repeated_output_value(vout, transaction_hash, debug=False, log_file=Fals
         return False
         
     target = max(min(int(math.log2(len(vout))), 5), 3)
+    # target = 3
     output_values = [out.get("value") for out in vout if out.get("value") is not None]
     value_counts = Counter(output_values)
+    vin_count = len(vin)
+    vout_count = len(vout)
 
     # Sort by value in descending order
     sorted_value_counts = sorted(value_counts.items(), key=lambda x: -x[0])
-    # Filter by threshold and take top 5
-    top5 = [(value, count) for value, count in sorted_value_counts if count >= target][:5]
+    # Filter by threshold and take top 10
+    top10 = [(value, count) for value, count in sorted_value_counts if count >= target][:10]
 
-    if top5:
-        log_debug(f"CoinJoin-like detected: Top 5 output values exceeding threshold {target}:", debug, log_file)
-        for value, count in top5:
+
+
+    if top10:
+        log_debug(f"CoinJoin-like detected: Top 10 output values exceeding threshold {target}:", debug, log_file)
+        for value, count in top10:
             log_debug(f"Value: {value}, Count: {count}", True, log_file)
 
         # Write to CSV file
-        file_exists = os.path.exists(top5_file)
-        with open(top5_file, mode='a', newline='') as csv_file_obj:
-            fieldnames = ['transaction_hash', 'top5_data']
+        file_exists = os.path.exists(top10_file)
+        with open(top10_file, mode='a', newline='') as csv_file_obj:
+            fieldnames = [
+                'transaction_hash',
+                'number_of_input',
+                'number_of_output',
+                'total_btc_amount',
+                'top10_data'
+            ]
             writer = csv.DictWriter(csv_file_obj, fieldnames=fieldnames)
 
             # If the file does not exist, write the header
@@ -80,7 +91,10 @@ def has_repeated_output_value(vout, transaction_hash, debug=False, log_file=Fals
             # Write each top 5 value and count with the transaction hash
             writer.writerow({
                 'transaction_hash': transaction_hash,
-                'top5_data': top5,
+                'number_of_input': vin_count,
+                'number_of_output': vout_count,
+                'total_btc_amount': sum(output_values),
+                'top10_data': top10,
             })
 
         return True
@@ -89,29 +103,7 @@ def has_repeated_output_value(vout, transaction_hash, debug=False, log_file=Fals
     return False
 
 
-# def has_repeated_output_value(vout, debug=False, log_file=False):
-#     """
-#     Rule 3:
-#     - At least one output value must reach the threshold frequency.
-#     """
-#     if len(vout) < 3:
-#         log_debug("Not CoinJoin: Insufficient outputs for meaningful analysis.", debug, log_file)
-#         return False
-        
-#     target = max(min(int(math.log2(len(vout))), 5), 3)
-#     output_values = [out.get("value") for out in vout if out.get("value") is not None]
-#     value_counts = Counter(output_values)
-
-#     log_debug(f"Output Values Frequency: {value_counts}", debug, log_file)
-    
-#     if any(count >= target for count in value_counts.values()):
-#         log_debug(f"CoinJoin-like detected: At least one output value appears {target} or more times.", debug, log_file)
-#         return True
-
-#     log_debug(f"Not CoinJoin: No output value meets the threshold: {target}.", debug, log_file)
-#     return False
-
-def has_unique_addresses(vout, debug=False, log_file=None):
+def has_unique_output_addresses(vout, debug=False, log_file=None):
     """
     Rule 4: Output addresses must be unique.
     """
@@ -125,21 +117,6 @@ def has_unique_addresses(vout, debug=False, log_file=None):
             seen_addresses.add(address)
     log_debug("Rule passed: All output addresses are unique.", debug, log_file)
     return True
-
-# def has_same_value_different_addresses(vout, debug=False, log_file=False):
-#     """Rule 4: Same output value must have different addresses"""
-#     seen_values = {}
-#     for output in vout:
-#         value = output.get("value")
-#         addresses = output.get("addresses", [])
-#         if value and addresses:
-#             for address in addresses:
-#                 if value in seen_values and seen_values[value] == address:
-#                     log_debug(f"Not CoinJoin: Output with value {value} has the same address {address}.", debug, log_file)
-#                     return False
-#                 seen_values[value] = address
-#     log_debug("Rule 4 passed: Same value has different addresses.", debug, log_file)
-#     return True
 
 
 def has_reasonable_output_count(vin, vout, debug=False, log_file=False):
@@ -161,7 +138,7 @@ def has_op_return_output(vout, debug=False, log_file=False):
     log_debug("Rule 6 passed: No OP_RETURN outputs found.", debug, log_file)
     return True
 
-def has_unique_input_addresses(vin, debug=False, log_file=False):
+def has_not_only_one_input_addresses(vin, debug=False, log_file=False):
     """
     Rule 7: All input addresses must not be the same.
     """
@@ -176,10 +153,37 @@ def has_unique_input_addresses(vin, debug=False, log_file=False):
     log_debug("Rule 7 passed: Input addresses are not all the same.", debug, log_file)
     return True
 
+def has_unique_input_addresses_by_value(vin, debug=False, log_file=False):
+    """
+    Rule 7 (updated): For inputs with the same value, their addresses must be unique.
+    """
+    # Dictionary to store addresses grouped by value
+    value_to_addresses = {}
+
+    for input_data in vin:
+        value = input_data.get("value")  # Extract the value of the input
+        addresses = input_data.get("addresses", [])  # Extract associated addresses
+
+        if value is not None:
+            if value not in value_to_addresses:
+                value_to_addresses[value] = set()  # Initialize a set for this value
+
+            for address in addresses:
+                if address in value_to_addresses[value]:
+                    log_debug(
+                        f"Not CoinJoin: Duplicate address '{address}' found for value '{value}'.",
+                        debug,
+                        log_file,
+                    )
+                    return False  # Duplicate address found for the same value
+                value_to_addresses[value].add(address)  # Add address to the set
+
+    log_debug("Rule passed: All addresses are unique for the same value.", debug, log_file)
+    return True
 
 
 
-def is_coinjoin_like(tx, debug=False, log_file=False, top5_file=False):
+def is_coinjoin_like(tx, debug=False, log_file=False, top10_file=False):
     """
     Check if the transaction has CoinJoin-like characteristics
     """
@@ -190,7 +194,7 @@ def is_coinjoin_like(tx, debug=False, log_file=False, top5_file=False):
     # Check rules
     if not has_minimum_inputs(vin, debug, log_file):
         return False
-    if not has_unique_input_addresses(vin, debug, log_file):
+    if not has_not_only_one_input_addresses(vin, debug, log_file):
         return False
     if not has_sufficient_outputs(vin, vout, debug, log_file):
         return False
@@ -198,15 +202,17 @@ def is_coinjoin_like(tx, debug=False, log_file=False, top5_file=False):
         return False
     if not has_op_return_output(vout, debug, log_file):
         return False
-    if not has_unique_addresses(vout, debug, log_file):
+    if not has_unique_output_addresses(vout, debug, log_file):
         return False
-    if not has_repeated_output_value(vout,transaction_hash ,debug, log_file,top5_file):
+    if not has_unique_input_addresses_by_value(vin, debug, log_file):
+        return False
+    if not has_repeated_output_value(vout,vin,transaction_hash ,debug, log_file,top10_file):
         return False
 
     # If all rules pass, it is considered possibly CoinJoin-like
     return True
 
-def analyze_transactions(file_path, debug=False, log_file=False, coinjoin_file=False, top5_file=False):
+def analyze_transactions(file_path, debug=False, log_file=False, coinjoin_file=False, top10_file=False):
     """
     Read the file and analyze the transaction, and save the input address that matches the CoinJoin feature to a CSV file.
     """
@@ -233,7 +239,7 @@ def analyze_transactions(file_path, debug=False, log_file=False, coinjoin_file=F
                         transaction = json.loads(line.strip())
 
                         # Determine whether the transaction meets the CoinJoin characteristics
-                        if is_coinjoin_like(transaction, False, log_file, top5_file):
+                        if is_coinjoin_like(transaction, False, log_file, top10_file):
                             result = {
                                 "hash": transaction["hash"],
                                 "line": line_number,
@@ -264,11 +270,3 @@ def analyze_transactions(file_path, debug=False, log_file=False, coinjoin_file=F
     
     return True
 
-def main():
-    # Specify the JSON file path
-    file_path = "./txn/block_795550_transactions_details.json"
-    results = analyze_transactions(file_path, debug=True, log_file="coinjoin_analysis.log",coinjoin_file ="coinjoin_input_addresses.csv")  # Set debug to True to enable log printingprocess_transaction_file(file_path, debug=False)
-
-
-if __name__ == "__main__":
-    main()
